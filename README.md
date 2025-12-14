@@ -70,3 +70,8 @@ The server config drives the log destination. All server output is routed to the
 ## Notes
 - SCP v1 is intentionally simple and extensible; see `docs/protocol.md` for details.
 - Ensure firewall rules permit TCP on the configured port.
+
+## Authors
+- Tarun Kannan
+- Aidan Menzie
+- Maddie Ledesma
