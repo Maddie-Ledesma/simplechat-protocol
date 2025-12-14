@@ -1,0 +1,14 @@
+{
+  "hosts": [
+    {
+      "alias": "local",
+      "host": "127.0.0.1",
+      "port": 9000
+    },
+    {
+      "alias": "demo",
+      "host": "chat.example.net",
+      "port": 9010
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+plugins {
+    id 'java'
+}
+
+group = 'edu.merrimack.simplechat'
+version = '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation files('libs/merrimackutil.jar')
+    implementation 'org.slf4j:slf4j-api:1.7.36'
+    implementation 'ch.qos.logback:logback-classic:1.2.12'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.10.2'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.10.2'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.10.2'
+}
+
+tasks.test {
+    useJUnitPlatform()
+}
+
+tasks.register('runServer', JavaExec) {
+    group = 'application'
+    description = 'Run the SimpleChat server'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'edu.merrimack.simplechat.server.ServerMain'
+    if (project.hasProperty('args')) {
+        args((project.property('args') as String).split('\\s+'))
+    }
+}
+
+tasks.register('runClient', JavaExec) {
+    group = 'application'
+    description = 'Run the SimpleChat client'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'edu.merrimack.simplechat.client.ClientMain'
+    if (project.hasProperty('args')) {
+        args((project.property('args') as String).split('\\s+'))
+    }
+}
+
+def fatJarContents() {
+    configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) }
+}
+
+tasks.register('serverJar', Jar) {
+    group = 'build'
+    description = 'Assemble an executable server JAR with dependencies'
+    archiveClassifier = 'server'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes('Main-Class': 'edu.merrimack.simplechat.server.ServerMain')
+    }
+    from sourceSets.main.output
+    from fatJarContents()
+}
+
+tasks.register('clientJar', Jar) {
+    group = 'build'
+    description = 'Assemble an executable client JAR with dependencies'
+    archiveClassifier = 'client'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    manifest {
+        attributes('Main-Class': 'edu.merrimack.simplechat.client.ClientMain')
+    }
+    from sourceSets.main.output
+    from fatJarContents()
+}
+
+tasks.named('build') {
+    dependsOn tasks.named('serverJar'), tasks.named('clientJar')
+}
