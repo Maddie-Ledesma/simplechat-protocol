@@ -53,8 +53,19 @@ public class ChatClient {
             throw new InvalidObjectException("No response from server");
         }
         BaseMessage msg = MessageParser.parse(ackJson);
+        if (msg.getType() == MessageType.ERROR) {
+            ErrorMessage err = (ErrorMessage) msg;
+            String reason = err.getMessageText();
+            if ("USERNAME_TAKEN".equalsIgnoreCase(err.getCode())) {
+                reason = "The username '" + username + "' is already in use. Please choose a different name or disconnect the other session.";
+            }
+            if (reason == null || reason.isBlank()) {
+                reason = "Server rejected the connection" + (err.getCode() != null ? " (" + err.getCode() + ")" : "");
+            }
+            throw new InvalidObjectException(reason);
+        }
         if (msg.getType() != MessageType.CONNECT_ACK) {
-            throw new InvalidObjectException("Unexpected handshake response");
+            throw new InvalidObjectException("Unexpected handshake response: " + msg.getType());
         }
         ConnectAckMessage ack = (ConnectAckMessage) msg;
         if (!"OK".equalsIgnoreCase(ack.getStatus())) {

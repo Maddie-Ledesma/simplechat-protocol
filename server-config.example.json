@@ -1,4 +1,4 @@
-{
+ {
   "port": 9000,
   "logFile": "./server.log",
   "maxClients": 100

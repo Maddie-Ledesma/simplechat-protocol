@@ -2,6 +2,7 @@ package edu.merrimack.simplechat.server;
 
 import edu.merrimack.simplechat.common.Framing;
 import edu.merrimack.simplechat.common.NetUtil;
+import edu.merrimack.simplechat.common.ProtocolConstants;
 import edu.merrimack.simplechat.common.protocol.BaseMessage;
 import edu.merrimack.simplechat.common.protocol.ChatMessage;
 import edu.merrimack.simplechat.common.protocol.ConnectAckMessage;
@@ -68,13 +69,15 @@ public class ClientHandler implements Runnable {
         try {
             base = MessageParser.parse(firstJson);
         } catch (InvalidObjectException e) {
-            send(new ErrorMessage("BAD_JSON", e.getMessage()));
+            send(new ErrorMessage("BAD_JSON", "We could not read your first message: "
+                    + friendlyReason(e.getMessage())
+                    + ". Please send a CONNECT request encoded as JSON."));
             active = false;
             return;
         }
 
         if (base.getType() != MessageType.CONNECT) {
-            send(new ErrorMessage("INVALID_HANDSHAKE", "First message must be CONNECT"));
+            send(new ErrorMessage("INVALID_HANDSHAKE", "Please start by sending a CONNECT message as your first request."));
             active = false;
             return;
         }
@@ -86,7 +89,6 @@ public class ClientHandler implements Runnable {
         }
 
         if (!attemptSetUsername(desired)) {
-            send(new ErrorMessage("USERNAME_TAKEN", "Username already in use"));
             active = false;
             return;
         }
@@ -111,7 +113,8 @@ public class ClientHandler implements Runnable {
             try {
                 msg = MessageParser.parse(json);
             } catch (InvalidObjectException e) {
-                send(new ErrorMessage("INVALID_MESSAGE", e.getMessage()));
+                send(new ErrorMessage("INVALID_MESSAGE", "We could not process that message: "
+                        + friendlyReason(e.getMessage())));
                 continue;
             }
 
@@ -129,7 +132,7 @@ public class ClientHandler implements Runnable {
                     handleListUsers((ListUsersMessage) msg);
                     break;
                 default:
-                    send(new ErrorMessage("NOT_ALLOWED", "Message type not allowed in this state"));
+                    send(new ErrorMessage("NOT_ALLOWED", "That message type is not allowed after connecting. You can chat, change your username, list users, or disconnect."));
             }
         }
     }
@@ -148,11 +151,13 @@ public class ClientHandler implements Runnable {
      */
     private boolean attemptSetUsername(String desired) {
         if (desired == null || desired.isBlank()) {
-            send(new ErrorMessage("INVALID_USERNAME", "Username required"));
+            send(new ErrorMessage("INVALID_USERNAME", "Please choose a username (" + ProtocolConstants.MIN_USERNAME_LENGTH
+                    + "-" + ProtocolConstants.MAX_USERNAME_LENGTH
+                    + " characters using letters, numbers, '.', '-', or '_')."));
             return false;
         }
         if (!desired.equals(username) && !registry.register(desired, this)) {
-            send(new ErrorMessage("USERNAME_TAKEN", "Username already in use"));
+            send(new ErrorMessage("USERNAME_TAKEN", "That username is already connected. Please pick a different name."));
             return false;
         }
         if (username != null && !username.equals(desired)) {
@@ -167,13 +172,13 @@ public class ClientHandler implements Runnable {
      */
     private void handleChatMessage(ChatMessage msg) {
         if (!username.equals(msg.getFrom())) {
-            send(new ErrorMessage("INVALID_SENDER", "from field must match session username"));
+            send(new ErrorMessage("INVALID_SENDER", "The 'from' field must match your current username (" + username + ")."));
             return;
         }
         if (msg.isDirect()) {
             ClientHandler target = registry.get(msg.getTo());
             if (target == null) {
-                send(new ErrorMessage("UNKNOWN_USER", "User not found: " + msg.getTo()));
+                send(new ErrorMessage("UNKNOWN_USER", "Could not find user '" + msg.getTo() + "'. They may be offline."));
                 return;
             }
             target.send(msg);
@@ -217,5 +222,45 @@ public class ClientHandler implements Runnable {
             registry.broadcast(new ServerBroadcastMessage(username + " left"), this);
         }
         NetUtil.closeQuietly(socket);
+    }
+
+    /** Turns terse validation errors into human-readable reasons. */
+    private String friendlyReason(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "unspecified validation issue";
+        }
+
+        String normalized = raw.trim().toLowerCase();
+        if (normalized.contains("username length invalid")) {
+            return "usernames must be between " + ProtocolConstants.MIN_USERNAME_LENGTH + " and "
+                    + ProtocolConstants.MAX_USERNAME_LENGTH + " characters";
+        }
+        if (normalized.contains("username contains invalid characters")) {
+            return "usernames can only use letters, numbers, '.', '-', or '_'";
+        }
+        if (normalized.contains("username required")) {
+            return "a username is required";
+        }
+        if (normalized.contains("unsupported version")) {
+            return "the client version is not supported by this server";
+        }
+        if (normalized.contains("missing type")) {
+            return "every message needs a 'type' field";
+        }
+        if (normalized.contains("bad json")) {
+            return "the message was not valid JSON";
+        }
+        if (normalized.contains("timestamp missing")) {
+            return "messages must include a timestamp";
+        }
+        if (normalized.contains("cannot be empty")) {
+            return "required fields cannot be empty";
+        }
+        if (normalized.contains("too long")) {
+            return "one of the fields is too long";
+        }
+
+        String trimmed = raw.trim();
+        return Character.toUpperCase(trimmed.charAt(0)) + trimmed.substring(1);
     }
 }
